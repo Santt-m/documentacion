@@ -1,0 +1,422 @@
+# Capítulo 3: Seguridad en el Desarrollo de Software
+
+## 3.1 Seguridad Frontend
+
+### 3.1.1 Frontend (Next.js/React)
+
+La seguridad en el frontend se centra en proteger al usuario y prevenir ataques que puedan comprometer la integridad de la aplicación en el navegador.
+
+```typescript
+// pages/_document.tsx - Cabeceras de seguridad
+import Document, { Html, Head, Main, NextScript, DocumentContext } from 'next/document';
+
+class MyDocument extends Document {
+  static async getInitialProps(ctx: DocumentContext) {
+    const initialProps = await Document.getInitialProps(ctx);
+    return { ...initialProps };
+  }
+
+  render() {
+    return (
+      <Html>
+        <Head>
+          {/* Content-Security-Policy para prevenir XSS */}
+          <meta
+            httpEquiv="Content-Security-Policy"
+            content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.example.com;"
+          />
+          {/* Prevenir clickjacking */}
+          <meta httpEquiv="X-Frame-Options" content="DENY" />
+          {/* Forzar HTTPS */}
+          <meta httpEquiv="Strict-Transport-Security" content="max-age=63072000; includeSubDomains; preload" />
+          {/* Prevenir MIME sniffing */}
+          <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
+          {/* Referrer policy */}
+          <meta name="referrer" content="same-origin" />
+        </Head>
+        <body>
+          <Main />
+          <NextScript />
+        </body>
+      </Html>
+    );
+  }
+}
+
+export default MyDocument;
+```
+
+### 3.1.2 Middleware de Seguridad (Express)
+
+```typescript
+// middleware/security.ts
+import express from 'express';
+import helmet from 'helmet'; // Colección de middlewares para seguridad HTTP
+import rateLimit from 'express-rate-limit'; // Middleware para limitar el número de solicitudes
+
+const app = express(); // Asumiendo que 'app' es tu instancia de Express
+
+// Helmet configura múltiples cabeceras de seguridad
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "https://api.example.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  // Otras opciones de helmet
+}));
+
+// Límite de tasa para prevenir ataques de fuerza bruta y DDoS
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // Límite de 100 solicitudes por ventana por IP
+  standardHeaders: true, // Devolver información de límite de tasa en los headers `RateLimit-*`
+  legacyHeaders: false, // Deshabilitar los headers `X-RateLimit-*`
+  message: 'Demasiadas solicitudes desde esta IP, por favor intente de nuevo después de 15 minutos'
+});
+
+// Aplicar límite de tasa a todas las solicitudes
+app.use(limiter);
+```
+
+### 3.1.3 Principales Amenazas y Mitigaciones (Ampliado)
+
+#### Inyecciones SQL
+
+Las inyecciones SQL ocurren cuando un atacante inserta código SQL malicioso en una entrada de datos de la aplicación, que luego es ejecutado por la base de datos.
+
+**Mitigación Clave:** Utilizar ORMs (Object-Relational Mappers) o consultas parametrizadas. Estas herramientas separan los datos de los comandos SQL, evitando que la entrada del usuario sea interpretada como código ejecutable.
+
+#### Validación y Sanitización de Datos
+
+```typescript
+import { z } from 'zod'; // Importar Zod para la validación de esquemas
+
+// Definición de un esquema de usuario con Zod
+// Cada propiedad tiene reglas de validación específicas
+const UserSchema = z.object({
+  email: z.string().email({ message: "Formato de email inválido." }), // Valida que sea un email válido
+  password: z.string()
+    .min(8, { message: "La contraseña debe tener al menos 8 caracteres." })
+    .max(100)
+    .regex(/[A-Z]/, { message: "La contraseña debe incluir al menos una letra mayúscula." })
+    .regex(/[0-9]/, { message: "La contraseña debe incluir al menos un número." })
+    .regex(/[^A-Za-z0-9]/, { message: "La contraseña debe incluir al menos un carácter especial." }),
+  name: z.string().min(2).max(50),
+  age: z.number().int().positive().optional(), // Número entero positivo opcional
+});
+
+// Ejemplo de uso de la validación
+type NewUser = z.infer<typeof UserSchema>; // Infiere el tipo TypeScript del esquema
+
+function validateAndProcessUser(userData: any) {
+  try {
+    // Intenta parsear y validar los datos de entrada contra el esquema
+    const validatedUser = UserSchema.parse(userData);
+    console.log("Datos de usuario válidos:", validatedUser);
+    
+    // Ahora puedes trabajar con el usuario validado de forma segura
+    // Por ejemplo, guardar en la base de datos
+    return { success: true, user: validatedUser };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      // Zod proporciona errores detallados por campo
+      console.error("Error de validación:", error.errors);
+      return { 
+        success: false, 
+        errors: error.errors.map(e => ({
+          field: e.path.join('.'),
+          message: e.message
+        }))
+      };
+    }
+    console.error("Error desconocido:", error);
+    return { success: false, errors: [{ message: "Error inesperado durante la validación." }] };
+  }
+}
+
+// Ejemplo de uso
+const userData = {
+  email: "usuario@example.com",
+  password: "Segura123$",
+  name: "Juan Pérez",
+  age: 30
+};
+
+const result = validateAndProcessUser(userData);
+if (result.success) {
+  // Proceder con el usuario validado
+} else {
+  // Manejar los errores de validación
+  result.errors?.forEach(err => {
+    console.log(`Error en ${err.field || 'formulario'}: ${err.message}`);
+  });
+}
+```
+
+#### Cross-Site Scripting (XSS)
+
+XSS ocurre cuando un atacante logra inyectar scripts maliciosos en páginas web vistas por otros usuarios. Estos scripts pueden robar cookies, tokens de sesión o redirigir a sitios maliciosos.
+
+**Mitigación Clave:**
+
+- **Sanitizar Inputs:** Siempre sanitizar cualquier entrada de usuario antes de renderizarla en el DOM. Librerías como DOMPurify son efectivas para limpiar HTML y prevenir la inyección de scripts.
+
+- **Escape de Salidas:** Escapar el contenido generado por el usuario antes de mostrarlo en la interfaz. Frameworks como React realizan un auto-escape en JSX, lo que significa que el contenido incrustado en {} se convierte en texto seguro por defecto.
+
+```typescript
+// Ejemplo de React con contenido sanitizado (si se necesita mostrar HTML del usuario)
+import DOMPurify from 'dompurify';
+import React from 'react';
+
+interface CommentProps {
+  htmlContent: string;
+}
+
+const UserComment: React.FC<CommentProps> = ({ htmlContent }) => {
+  // Sanitizar el HTML antes de renderizarlo
+  const sanitizedHTML = DOMPurify.sanitize(htmlContent, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a', 'p', 'br'],
+    ALLOWED_ATTR: ['href', 'target', 'rel']
+  });
+  
+  return (
+    <div className="user-comment">
+      {/* Utilizar dangerouslySetInnerHTML sólo con contenido sanitizado */}
+      <div dangerouslySetInnerHTML={{ __html: sanitizedHTML }} />
+    </div>
+  );
+};
+```
+
+#### Content Security Policy (CSP)
+
+CSP es un mecanismo de seguridad que ayuda a prevenir ataques XSS y relacionados al especificar qué dominios son fuentes confiables para scripts, estilos y otros recursos.
+
+**Implementación en Next.js:**
+
+```typescript
+// next.config.js
+const ContentSecurityPolicy = `
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'unsafe-eval';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  font-src 'self' data:;
+  connect-src 'self' https://api.example.com;
+  frame-ancestors 'none';
+  form-action 'self';
+`;
+
+const securityHeaders = [
+  {
+    key: 'Content-Security-Policy',
+    value: ContentSecurityPolicy.replace(/\s{2,}/g, ' ').trim()
+  },
+  {
+    key: 'X-Frame-Options',
+    value: 'DENY'
+  },
+  {
+    key: 'X-Content-Type-Options',
+    value: 'nosniff'
+  },
+  {
+    key: 'Referrer-Policy',
+    value: 'origin-when-cross-origin'
+  },
+  // Añadir cabecera Permissions-Policy para limitar ciertas características del navegador
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=()'
+  }
+];
+
+module.exports = {
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: securityHeaders,
+      },
+    ];
+  },
+  // Otras configuraciones de Next.js
+};
+```
+
+### Estrategias de Seguridad en Formularios
+
+La seguridad en formularios es crucial ya que estos son un punto común de entrada para ataques:
+
+1. **Validación en el Cliente y Servidor:** Implementar validaciones tanto en el cliente (para UX) como en el servidor (para seguridad).
+
+2. **Limitación de Intentos:** Implementar bloqueos temporales después de múltiples intentos fallidos en formularios sensibles como login.
+
+3. **CAPTCHA/reCAPTCHA:** Para formularios públicos, utilizar sistemas como reCAPTCHA para prevenir ataques automatizados.
+
+4. **Tokens Anti-CSRF:** Implementar tokens para verificar que las solicitudes POST provienen de tu propio sitio web.
+
+```typescript
+// Ejemplo de componente de formulario seguro en React
+import React, { useState, FormEvent } from 'react';
+import { z } from 'zod';
+
+// Esquema de validación para el formulario de contacto
+const ContactFormSchema = z.object({
+  name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  email: z.string().email("Email inválido"),
+  message: z.string().min(10, "El mensaje debe tener al menos 10 caracteres").max(500)
+});
+
+const ContactForm: React.FC = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    message: ''
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState<{success?: boolean; message?: string}>({});
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Limpiar el error específico cuando el usuario comienza a corregir
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const validateForm = (): boolean => {
+    try {
+      ContactFormSchema.parse(formData);
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Record<string, string> = {};
+        error.errors.forEach(err => {
+          if (err.path) {
+            newErrors[err.path[0]] = err.message;
+          }
+        });
+        setErrors(newErrors);
+      }
+      return false;
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Aquí iría el código para enviar el formulario al servidor
+      // Incluir el token CSRF en la solicitud
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // El token CSRF podría venir de un estado global o un contexto
+          'X-CSRF-Token': 'token-from-server' 
+        },
+        body: JSON.stringify(formData)
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.message || 'Error al enviar el formulario');
+      
+      setSubmitResult({ success: true, message: 'Mensaje enviado correctamente' });
+      // Limpiar el formulario después del éxito
+      setFormData({ name: '', email: '', message: '' });
+    } catch (error) {
+      console.error('Error al enviar formulario:', error);
+      setSubmitResult({ 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Error desconocido al procesar el formulario'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {submitResult.message && (
+        <div className={`p-3 rounded ${submitResult.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          {submitResult.message}
+        </div>
+      )}
+      
+      <div>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre</label>
+        <input
+          type="text"
+          id="name"
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          className={`mt-1 block w-full px-3 py-2 border ${errors.name ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm`}
+        />
+        {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+      </div>
+      
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          value={formData.email}
+          onChange={handleChange}
+          className={`mt-1 block w-full px-3 py-2 border ${errors.email ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm`}
+        />
+        {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+      </div>
+      
+      <div>
+        <label htmlFor="message" className="block text-sm font-medium text-gray-700">Mensaje</label>
+        <textarea
+          id="message"
+          name="message"
+          rows={4}
+          value={formData.message}
+          onChange={handleChange}
+          className={`mt-1 block w-full px-3 py-2 border ${errors.message ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm`}
+        />
+        {errors.message && <p className="mt-1 text-sm text-red-600">{errors.message}</p>}
+      </div>
+      
+      <div>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300"
+        >
+          {isSubmitting ? 'Enviando...' : 'Enviar mensaje'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+export default ContactForm;
+```
