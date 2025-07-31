@@ -2,7 +2,7 @@
 
 ## 6.2 Next.js: El Framework de React
 
-Next.js es un framework de React que proporciona estructura, características y optimizaciones para aplicaciones web. Creado por Vercel, Next.js simplifica el desarrollo de aplicaciones React complejas con funcionalidades como renderizado del lado del servidor (SSR), generación estática (SSG), y enrutamiento basado en sistema de archivos.
+Next.js es un framework de React que proporciona estructura, características y optimizaciones para aplicaciones web. Creado por Vercel, Next.js simplifica el desarrollo de aplicaciones React complejas con funcionalidades como renderizado del lado del servidor (SSR), generación estática (SSG), y enrutamiento basado en sistema de archivos. Este capítulo cubre Next.js 15, la versión más reciente.
 
 ### 6.2.1 Introducción a Next.js
 
@@ -51,25 +51,76 @@ mi-proyecto/
 └── README.md
 ```
 
-#### Estructura de Directorios en Next.js 13+
+#### Estructura de Directorios en Next.js 15
 
-En versiones más recientes (Next.js 13+), la estructura recomendada cambia usando el directorio `app`:
+En Next.js 15, la estructura recomendada y predeterminada usa el directorio `app` para el nuevo App Router:
 
 ```
 mi-proyecto/
-├── app/                 # Directorio principal para el App Router
-│   ├── layout.js        # Diseño compartido entre páginas
-│   ├── page.js          # Página principal (reemplaza a pages/index.js)
-│   ├── about/
+│── app/                 # Directorio principal para el App Router (predeterminado en Next.js 15)
+│   │── layout.js        # Diseño compartido entre páginas
+│   │── page.js          # Página principal
+│   │── about/
 │   │   └── page.js      # Ruta /about
+│   │── dashboard/
+│   │   │── layout.js    # Diseño específico para el dashboard
+│   │   │── page.js      # Página principal del dashboard
+│   │   └── [id]/        # Ruta dinámica
+│   │       └── page.js  # Página de detalle con parámetro dinámico
 │   └── api/             # Rutas API con el App Router
 │       └── route.js     # Manejador de ruta API
-├── components/          # Componentes reutilizables
-├── public/              # Archivos estáticos
+│── components/          # Componentes reutilizables
+│── public/              # Archivos estáticos
 └── ...                  # Otros archivos de configuración
 ```
 
-### 6.2.3 Sistema de Enrutamiento
+### 6.2.3 Sistema de Enrutamiento: App Router vs Pages Router
+
+#### Comparación entre App Router y Pages Router
+
+Next.js 15 ofrece dos sistemas de enrutamiento diferentes, cada uno con sus propias características y casos de uso. El App Router es la opción recomendada para nuevos proyectos, mientras que Pages Router se mantiene por razones de compatibilidad.
+
+| Característica | App Router (app/) | Pages Router (pages/) |
+|---------------|------------------|----------------------|
+| Modelo de renderizado | React Server Components (RSC) | Client-side components |
+| Componentes por defecto | Componentes de servidor | Componentes de cliente |
+| Archivo de definición | page.js | [nombre].js |
+| Layouts | Sistema jerárquico con layout.js | Componentes personalizados en _app.js |
+| Rutas dinámicas | [param]/page.js o [...param]/page.js | [param].js o [...param].js |
+| Rutas API | route.js con métodos HTTP | api/[ruta].js con handler(req, res) |
+| Data Fetching | fetch() con opciones de cache/revalidate | getServerSideProps/getStaticProps |
+| Streaming | Suspense y streaming nativo | No soportado nativamente |
+| Metadata | Exports de metadata y generateMetadata | Componente Head de next/head |
+| Interacciones cliente | Necesita directiva 'use client' | Todo es cliente por defecto |
+
+##### Ventajas del App Router
+
+- **React Server Components**: Reduce el JavaScript enviado al cliente
+- **Layouts anidados**: Más fácil crear interfaces complejas con layouts compartidos
+- **Fetching de datos colocado**: Los datos se pueden obtener directamente en los componentes
+- **Streaming y carga progresiva**: Mejor UX durante cargas de datos
+- **Estructura intuitiva**: Los archivos page.js, layout.js, loading.js tienen roles claros
+- **Mejoras de caché**: Control granular sobre el caché y revalidación
+
+##### Ventajas del Pages Router
+
+- **Madurez**: Sistema más probado y con más recursos/ejemplos disponibles
+- **Simplicidad**: Para aplicaciones pequeñas puede ser más directo
+- **Compatibilidad**: Algunas librerías legacy funcionan mejor con Pages Router
+- **Familiaridad**: Desarrolladores con experiencia en Next.js ya lo conocen
+
+#### Migración de Pages Router a App Router
+
+Next.js 15 permite la coexistencia de ambos sistemas, facilitando la migración gradual:
+
+```
+mi-proyecto/
+├── app/                 # App Router (nuevas funcionalidades)
+│   └── nueva-seccion/
+│       └── page.js
+└── pages/               # Pages Router (código existente)
+    └── index.js
+```
 
 #### Enrutamiento Basado en Sistema de Archivos (Pages Router)
 
@@ -248,20 +299,34 @@ export default function LoginForm() {
     router.push('/dashboard');
   };
   
-  // ...
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* Formulario de login */}
+    </form>
+  );
 }
 ```
 
 ### 6.2.4 Estrategias de Renderizado
 
-Next.js ofrece múltiples estrategias de renderizado adaptadas a diferentes casos de uso.
+#### Estrategias de Renderizado en Next.js 15
+
+Next.js 15 ofrece varias estrategias de renderizado que se pueden elegir según los requisitos de cada ruta de la aplicación:
+
+| Estrategia | Descripción | Uso Recomendado |
+|-----------|-------------|------------------|
+| Static Rendering (predeterminado) | Renderizado en tiempo de build | Contenido que no cambia frecuentemente |
+| Dynamic Rendering | Renderizado en tiempo de solicitud | Contenido personalizado o dependiente de cookies/headers |
+| Streaming | Renderizado progresivo | Interfaces complejas con distintas prioridades de carga |
+
+Con el App Router, la elección entre estas estrategias es más granular y puede aplicarse a nivel de componente o ruta.
 
 #### Renderizado del Lado del Servidor (SSR)
 
-El contenido se genera en cada solicitud en el servidor.
+Las páginas se generan en el servidor en cada solicitud.
 
 ```jsx
-// pages/ssr-page.js
+// En Pages Router (pages/ssr-page.js)
 export default function Page({ data }) {
   return <div>Datos: {data}</div>;
 }
@@ -273,20 +338,24 @@ export async function getServerSideProps() {
   const data = await res.json();
   
   // Pasar los datos como props
-  return { props: { data } };
+  return {
+    props: { data },
+  };
 }
 ```
 
-En App Router:
+En App Router, el SSR se realiza de forma nativa usando la función `fetch` con la opción `{ cache: 'no-store' }`:
 
 ```jsx
-// app/ssr-page/page.js
+// En App Router (app/ssr-page/page.js)
 async function getData() {
+  // No caché - se ejecuta en cada solicitud (equivalente a getServerSideProps)
   const res = await fetch('https://api.example.com/data', { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to fetch data');
   return res.json();
 }
 
+// Los componentes de página en app/ son de servidor por defecto
 export default async function Page() {
   // Componentes de servidor pueden ser async
   const data = await getData();
@@ -297,7 +366,9 @@ export default async function Page() {
 
 #### Generación Estática (SSG)
 
-El contenido se genera durante la compilación y se sirve como HTML estático.
+El contenido se genera durante la compilación y se sirve como HTML estático. En Next.js 15, esta es la estrategia de renderizado predeterminada para la mayoria de los casos.
+
+##### En Pages Router:
 
 ```jsx
 // pages/ssg-page.js
@@ -312,18 +383,18 @@ export async function getStaticProps() {
   
   return {
     props: { data },
-    // Opcional: revalidación incremental (ISR)
-    revalidate: 60, // segundos
   };
 }
 ```
 
-En App Router:
+##### En App Router:
+
+En App Router, la generación estática es el comportamiento predeterminado. Cualquier componente que no use datos dinámicos o caché específico se genera estáticamente durante la compilación:
 
 ```jsx
 // app/ssg-page/page.js
 async function getData() {
-  // Por defecto, fetch en App Router hace caché y se comporta como SSG
+  // Por defecto, fetch() cachea automáticamente en tiempo de build
   const res = await fetch('https://api.example.com/data');
   if (!res.ok) throw new Error('Failed to fetch data');
   return res.json();
@@ -331,7 +402,174 @@ async function getData() {
 
 export default async function Page() {
   const data = await getData();
+  
   return <div>Datos estáticos: {data}</div>;
+}
+```
+
+#### Revalidación Incremental Estática (ISR)
+
+##### En Pages Router:
+
+ISR combina las ventajas de SSG y SSR, permitiendo regenerar páginas estáticas en segundo plano.
+
+```jsx
+// pages/isr-page.js
+export async function getStaticProps() {
+  const res = await fetch('https://api.example.com/data');
+  const data = await res.json();
+  
+  return {
+    props: { data },
+    // Revalidación incremental: actualizar cada 60 segundos
+    revalidate: 60,
+  };
+}
+```
+
+##### En App Router (Next.js 15):
+
+```jsx
+// app/isr-page/page.js
+async function getData() {
+  // Revalidación incremental con la opción next.revalidate
+  const res = await fetch('https://api.example.com/data', {
+    next: { revalidate: 60 }, // Revalidar cada 60 segundos
+  });
+  if (!res.ok) throw new Error('Failed to fetch data');
+  return res.json();
+}
+
+export default async function Page() {
+  const data = await getData();
+  return <div>Datos revalidados: {data.time}</div>;
+}
+```
+
+Esta implementación es más granular en Next.js 15, permitiendo configurar diferentes tiempos de revalidación para distintas solicitudes dentro del mismo componente.
+
+#### Revalidación bajo Demanda
+
+Permite revalidar manualmente una página generada estáticamente cuando ocurren eventos específicos como actualizaciones en una base de datos.
+
+##### En Pages Router:
+
+```jsx
+// pages/api/revalidate.js
+export default async function handler(req, res) {
+  try {
+    // Verificar secreto para prevenir revalidación no autorizada
+    if (req.query.secret !== process.env.REVALIDATION_TOKEN) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    const path = req.query.path;
+    
+    // Revalidar la ruta
+    await res.revalidate(path);
+    
+    return res.json({ revalidated: true });
+  } catch (err) {
+    return res.status(500).json({ message: 'Error revalidating' });
+  }
+}
+```
+
+##### En App Router (Next.js 15):
+
+Next.js 15 proporciona las APIs `revalidatePath` y `revalidateTag` para un control más preciso de la revalidación:
+
+```jsx
+// app/api/revalidate/route.js
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { NextResponse } from 'next/server';
+
+export async function POST(request) {
+  const { secret, path, tag } = await request.json();
+  
+  if (secret !== process.env.REVALIDATION_TOKEN) {
+    return NextResponse.json({ message: 'Invalid token' }, { status: 401 });
+  }
+  
+  if (path) {
+    // Revalidar por ruta
+    revalidatePath(path);
+    return NextResponse.json({ revalidated: true, path });
+  } else if (tag) {
+    // Revalidar por etiqueta de caché
+    revalidateTag(tag);
+    return NextResponse.json({ revalidated: true, tag });
+  }
+  
+  return NextResponse.json(
+    { message: 'Path or tag parameter missing' },
+    { status: 400 }
+  );
+}
+```
+
+### 6.2.5 Middleware y Edge Runtime en Next.js 15
+
+Next.js 15 mejora significativamente las capacidades de middleware y Edge Runtime para aplicaciones modernas.
+
+#### Middleware
+
+El middleware permite ejecutar código antes de que una solicitud se complete, ideal para autenticación, redirecciones, reescritura de rutas, A/B testing y más.
+
+```jsx
+// middleware.js - se ejecuta en todas las rutas
+import { NextResponse } from 'next/server';
+
+export function middleware(request) {
+  // Obtener la ruta solicitada
+  const path = request.nextUrl.pathname;
+  
+  // Verificar si el usuario está autenticado (ejemplo con cookie)
+  const isAuthenticated = request.cookies.has('authToken');
+  
+  // Redireccionar a login si intenta acceder a rutas protegidas
+  if (path.startsWith('/dashboard') && !isAuthenticated) {
+    // Redirección con preservación de la URL original
+    const url = new URL('/login', request.url);
+    url.searchParams.set('from', path);
+    return NextResponse.redirect(url);
+  }
+  
+  // Añadir encabezados personalizados
+  if (path.startsWith('/api')) {
+    const response = NextResponse.next();
+    response.headers.set('x-api-version', '1.0.0');
+    return response;
+  }
+  
+  // Continuar con la solicitud normal
+  return NextResponse.next();
+}
+
+// Configuración para aplicar middleware solo a rutas específicas
+export const config = {
+  matcher: ['/dashboard/:path*', '/api/:path*'],
+};
+```
+
+#### Edge Runtime
+
+Next.js 15 mejora el soporte para Edge Runtime, permitiendo ejecutar código más cerca de los usuarios para menor latencia:
+
+```jsx
+// app/api/edge/route.js
+export const runtime = 'edge'; // Usar Edge Runtime en lugar de Node.js
+
+export async function GET() {
+  const data = {
+    timestamp: new Date().toISOString(),
+    region: process.env.VERCEL_REGION || 'unknown',
+  };
+  
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 ```
 
@@ -444,6 +682,7 @@ En App Router:
 ```jsx
 // app/isr-page/page.js
 async function getData() {
+  // Por defecto, fetch en App Router hace caché y se comporta como SSG
   const res = await fetch('https://api.example.com/data', {
     next: { revalidate: 60 }, // Revalidar cada 60 segundos
   });
@@ -630,9 +869,165 @@ function Profile() {
 }
 ```
 
-### 6.2.6 Layouts y Componentes Compartidos
+### 6.2.6 Server Actions y Gestión de Estado en Next.js 15
 
-#### Layouts en Pages Router
+Next.js 15 introduce Server Actions, una característica que permite ejecutar funciones asíncronas directamente en el servidor desde el cliente, simplificando operaciones como mutaciones de datos y formularios.
+
+#### Server Actions
+
+```jsx
+// app/actions.js
+'use server';
+
+import { revalidatePath } from 'next/cache';
+
+// Esta función se ejecuta en el servidor cuando se llama desde el cliente
+export async function createTodo(formData) {
+  const title = formData.get('title');
+  
+  // Validar en el servidor
+  if (!title || title.length < 3) {
+    return { error: 'El título debe tener al menos 3 caracteres' };
+  }
+  
+  try {
+    // Crear nuevo todo en base de datos
+    await db.todos.create({ title, completed: false });
+    
+    // Revalidar la página para mostrar el nuevo todo
+    revalidatePath('/todos');
+    
+    return { success: true };
+  } catch (error) {
+    return { error: 'Error al crear el todo' };
+  }
+}
+```
+
+#### Uso de Server Actions en formularios
+
+```jsx
+// app/todos/page.js
+import { createTodo } from '../actions';
+
+export default function TodosPage() {
+  return (
+    <div>
+      <h1>Mis Tareas</h1>
+      
+      {/* El formulario envía los datos directamente al servidor */}
+      <form action={createTodo}>
+        <input type="text" name="title" placeholder="Nueva tarea..." />
+        <button type="submit">Añadir</button>
+      </form>
+      
+      {/* Lista de tareas */}
+    </div>
+  );
+}
+```
+
+#### Optimistic UI con useOptimistic
+
+```jsx
+'use client';
+import { useOptimistic } from 'react';
+import { createTodo } from '../actions';
+
+export default function TodoForm({ todos }) {
+  // Estado optimista para actualización inmediata de UI
+  const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+    todos,
+    (state, newTodo) => [...state, newTodo]
+  );
+  
+  async function action(formData) {
+    // Crear una versión optimista de la nueva tarea
+    const newTodo = {
+      id: 'temp-' + Date.now(),
+      title: formData.get('title'),
+      completed: false,
+      pending: true, // Indicador visual de que está en proceso
+    };
+    
+    // Actualizar UI inmediatamente
+    addOptimisticTodo(newTodo);
+    
+    // Enviar al servidor
+    await createTodo(formData);
+  }
+  
+  return (
+    <div>
+      <form action={action}>
+        <input type="text" name="title" />
+        <button type="submit">Añadir</button>
+      </form>
+      
+      <ul>
+        {optimisticTodos.map(todo => (
+          <li key={todo.id} className={todo.pending ? 'pending' : ''}>
+            {todo.title}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+#### Caching y Revalidación Inteligente
+
+Next.js 15 proporciona un sistema avanzado de caché y revalidación:
+
+```jsx
+// app/products/[id]/page.js
+async function getProduct(id, storeId) {
+  const res = await fetch(`https://api.store.com/products/${id}`, {
+    // Options para control granular de caché
+    next: { 
+      revalidate: 3600, // Revalidar cada hora
+      tags: [`product-${id}`, `store-${storeId}`], // Tags para revalidación selectiva
+    },
+  });
+  return res.json();
+}
+
+export default async function ProductPage({ params }) {
+  const product = await getProduct(params.id, 'main-store');
+  
+  return (
+    <div>
+      <h1>{product.name}</h1>
+      <p>{product.description}</p>
+      <p>Precio: ${product.price}</p>
+    </div>
+  );
+}
+```
+
+La revalidación se puede disparar por tag específico cuando sea necesario:
+
+```jsx
+// app/api/revalidate/route.js
+import { revalidateTag } from 'next/cache';
+import { NextResponse } from 'next/server';
+
+export async function POST(request) {
+  const { productId } = await request.json();
+  
+  // Solo revalidar los componentes que usan este producto específico
+  revalidateTag(`product-${productId}`);
+  
+  return NextResponse.json({ revalidated: true });
+}
+```
+
+### 6.2.7 Layouts y Componentes Compartidos en Next.js 15
+
+La gestión de layouts y componentes compartidos ha evolucionado significativamente en Next.js 15, especialmente con la introducción del App Router.
+
+#### Layouts en Pages Router (Enfoque Tradicional)
 
 ```jsx
 // components/Layout.js
@@ -670,14 +1065,17 @@ export default function Home() {
 }
 ```
 
-#### Layouts en App Router
+#### Layouts en App Router (Next.js 15)
+
+En App Router, Next.js 15 ofrece un sistema de layouts integrado basado en archivos de convención, lo que elimina la necesidad de importar layouts manualmente en cada página:
 
 ```jsx
-// app/layout.js
+// app/layout.js - Layout raíz para toda la aplicación
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import './globals.css';
 
+// Metadata API - para SEO y social sharing
 export const metadata = {
   title: {
     template: '%s | Mi Sitio',
@@ -700,14 +1098,21 @@ export default function RootLayout({ children }) {
   );
 }
 
-// Layouts anidados
+// Layouts anidados - Una de las características principales de App Router en Next.js 15
 // app/dashboard/layout.js
 export default function DashboardLayout({ children }) {
   return (
     <div className="dashboard-layout">
       <aside>
         {/* Sidebar del dashboard */}
-        <nav>{/* Enlaces de navegación */}</nav>
+        <nav>
+          <h3>Panel de Control</h3>
+          <ul>
+            <li><a href="/dashboard/analytics">Análisis</a></li>
+            <li><a href="/dashboard/settings">Configuración</a></li>
+            <li><a href="/dashboard/users">Usuarios</a></li>
+          </ul>
+        </nav>
       </aside>
       <div className="dashboard-content">
         {children}
@@ -716,3 +1121,168 @@ export default function DashboardLayout({ children }) {
   );
 }
 ```
+
+En Next.js 15, los layouts anidados permiten mantener el estado entre navegaciones en la misma sección, lo que mejora considerablemente la experiencia de usuario.
+
+#### Templates vs. Layouts
+
+Next.js 15 introduce también los **templates** como una alternativa a los layouts. A diferencia de los layouts que preservan su estado y permanecen montados entre navegaciones, los templates se montan desde cero en cada navegación:
+
+```jsx
+// app/productos/template.js
+export default function ProductsTemplate({ children }) {
+  // Este componente se monta de nuevo en cada navegación
+  return (
+    <div className="products-container">
+      {/* Útil para reiniciar animaciones o estados en cada navegación */}
+      <div key={Math.random()} className="animate-in">
+        <ProductFilters />
+      </div>
+      {children}
+    </div>
+  );
+}
+```
+
+#### Estados de Carga (Loading UI)
+
+Next.js 15 proporciona una forma sencilla de mostrar estados de carga durante las navegaciones o mientras se cargan datos:
+
+```jsx
+// app/dashboard/loading.js
+export default function DashboardLoading() {
+  // Esta UI se muestra mientras se carga la página o los datos
+  return (
+    <div className="loading-container">
+      <div className="spinner"></div>
+      <p>Cargando panel de control...</p>
+    </div>
+  );
+}
+```
+
+El componente de loading se muestra automáticamente durante:
+
+1. La navegación entre rutas
+2. La carga de datos en componentes React Server Components
+3. La carga de datos en `useEffect` o cuando un cliente llama a una función asíncrona
+
+#### Manejo de Errores (Error Boundaries)
+
+Next.js 15 integra manejo de errores para manejar fallas de forma elegante:
+
+```jsx
+// app/dashboard/error.js
+'use client'; // Los componentes de error deben ser Client Components
+
+import { useEffect } from 'react';
+
+export default function DashboardError({ error, reset }) {
+  useEffect(() => {
+    // Opcional: registrar el error en un servicio de monitoreo
+    console.error('Error en Dashboard:', error);
+  }, [error]);
+
+  return (
+    <div className="error-container">
+      <h2>¡Algo salió mal en el panel!</h2>
+      <p>{error.message || 'Ha ocurrido un error inesperado'}</p>
+      <button
+        onClick={() => reset()} // Intenta volver a renderizar el segmento
+        className="retry-button"
+      >
+        Intentar de nuevo
+      </button>
+    </div>
+  );
+}
+```
+
+Los componentes de error pueden ser específicos para segmentos de la aplicación, permitiendo un control preciso del manejo de errores.
+
+### 6.2.8 Optimizaciones y Mejores Prácticas en Next.js 15
+
+#### Internacionalización (i18n)
+
+Next.js 15 facilita la creación de aplicaciones multiidioma con un enfoque basado en directorios:
+
+```jsx
+// app/[lang]/layout.js
+import { getDictionary } from '../dictionaries';
+
+export async function generateStaticParams() {
+  return [{ lang: 'es' }, { lang: 'en' }, { lang: 'fr' }];
+}
+
+export default async function Layout({ children, params }) {
+  const { lang } = params;
+  const dictionary = await getDictionary(lang);
+  
+  return (
+    <html lang={lang}>
+      <body>
+        <LocaleContext.Provider value={{ lang, dictionary }}>
+          {children}
+        </LocaleContext.Provider>
+      </body>
+    </html>
+  );
+}
+```
+
+#### Optimización de Imágenes
+
+El componente Image de Next.js 15 ofrece optimizaciones automáticas:
+
+```jsx
+import Image from 'next/image';
+
+export default function ProductView() {
+  return (
+    <div>
+      <Image
+        src="/products/coffee-machine.jpg"
+        alt="Máquina de café"
+        width={500}
+        height={300}
+        priority={true} // Carga prioritaria para LCP
+        placeholder="blur" // Efecto blur durante la carga
+        sizes="(max-width: 768px) 100vw, 50vw" // Responsive
+      />
+    </div>
+  );
+}
+```
+
+#### Scripts Optimizados
+
+```jsx
+import Script from 'next/script';
+
+export default function Analytics() {
+  return (
+    <>
+      {/* Carga cuando la página se vuelve interactiva */}
+      <Script id="analytics" strategy="afterInteractive">
+        {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});`}
+      </Script>
+      
+      {/* Se carga antes que cualquier otro script */}
+      <Script
+        src="https://cdn.example.com/critical.js"
+        strategy="beforeInteractive"
+      />
+      
+      {/* Se carga cuando el usuario hace scroll */}
+      <Script
+        src="https://cdn.example.com/lazy.js"
+        strategy="lazyOnload"
+      />
+    </>
+  );
+}
+```
+
+#### Conclusión
+
+Next.js 15 representa un avance significativo en el desarrollo de aplicaciones web modernas, proporcionando herramientas poderosas para construir experiencias rápidas, confiables y escalables. La combinación del App Router con React Server Components ofrece un modelo de desarrollo que optimiza tanto la experiencia del desarrollador como el rendimiento de la aplicación final. Las mejoras en caché, optimizaciones automáticas y patrones de composición facilitan la creación de aplicaciones sofisticadas manteniendo un código claro y mantenible.

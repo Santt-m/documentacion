@@ -2,9 +2,40 @@
 
 ## 6.1 Fundamentos de React
 
-React es una biblioteca de JavaScript para construir interfaces de usuario, especialmente aplicaciones de una sola página donde la experiencia del usuario es crucial. Desarrollada y mantenida por Facebook, React ha revolucionado el desarrollo frontend con su enfoque en componentes reutilizables y un flujo de datos unidireccional.
+React es una biblioteca JavaScript para construir interfaces de usuario. Desarrollada por Facebook (ahora Meta), React se ha convertido en una de las herramientas más populares para el desarrollo frontend. Este capítulo cubre React 19, la versión más reciente.
 
-### 6.1.1 Conceptos Fundamentales
+### 6.1.1 ¿Qué es React?
+
+React es una biblioteca declarativa, eficiente y flexible para construir interfaces de usuario. Permite componer UI complejas a partir de pequeños fragmentos de código aislados llamados "componentes".
+
+#### Características principales en React 19:
+
+1. **Declarativo**: React facilita la creación de UI interactivas. Diseña vistas simples para cada estado de tu aplicación, y React actualizará y renderizará eficientemente los componentes correctos cuando cambien los datos.
+
+2. **Basado en componentes**: Construye componentes encapsulados que manejan su propio estado, y compónelos para crear interfaces de usuario complejas.
+
+3. **Arquitectura moderna**: React 19 incluye importantes mejoras al modelo de renderizado con React Server Components, que separa la lógica del cliente y del servidor.
+
+4. **Rendimiento optimizado**: Incluye un nuevo motor de reconciliación que mejora significativamente el rendimiento y reduce el uso de memoria.
+
+5. **Compatibilidad con múltiples plataformas**: Desarrolla para web con React, móviles con React Native, y VR con React 360, manteniendo una base de conocimiento común.
+
+#### Configuración básica
+
+Para empezar con React 19, puedes usar las siguientes herramientas:
+
+```bash
+# Usando Create React App (con compatibilidad para React 19)
+npx create-react-app mi-aplicacion
+
+# Usando Vite (recomendado para React 19)
+npm create vite@latest mi-aplicacion -- --template react
+
+# Con TypeScript (recomendado para proyectos profesionales)
+npm create vite@latest mi-aplicacion -- --template react-ts
+```
+
+### 6.1.2 Conceptos Fundamentales
 
 #### Componentes
 
@@ -583,11 +614,11 @@ function UserProfile() {
 }
 ```
 
-### 6.1.6 Componentes de Orden Superior (HOCs) y Render Props
+### 6.1.6 Patrones Avanzados y React Server Components
 
-Estos son patrones avanzados para reutilizar lógica entre componentes.
+En React 19, además de los patrones clásicos como HOCs y Render Props, tenemos nuevos conceptos fundamentales como Server Components.
 
-#### HOCs
+#### Componentes de Orden Superior (HOCs)
 
 Un componente de orden superior es una función que toma un componente y devuelve un nuevo componente.
 
@@ -631,25 +662,33 @@ const ButtonWithTracking = withTracking(Button);
 Un componente con render props toma una función que devuelve un elemento React y la llama en lugar de implementar su propia lógica de renderizado.
 
 ```jsx
-// Componente que proporciona datos de posición del mouse
-class MouseTracker extends React.Component {
-  state = { x: 0, y: 0 };
+// Componente moderno con hooks que proporciona datos de posición del mouse
+import { useState, useEffect } from 'react';
+
+function MouseTracker({ render }) {
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   
-  handleMouseMove = (event) => {
-    this.setState({
-      x: event.clientX,
-      y: event.clientY
-    });
-  };
+  useEffect(() => {
+    const handleMouseMove = (event) => {
+      setMousePosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
   
-  render() {
-    return (
-      <div style={{ height: '100vh' }} onMouseMove={this.handleMouseMove}>
-        {/* Llama a la prop render pasando el estado como argumento */}
-        {this.props.render(this.state)}
-      </div>
-    );
-  }
+  return (
+    <div style={{ height: '100vh' }}>
+      {/* Llama a la prop render pasando el estado como argumento */}
+      {render(mousePosition)}
+    </div>
+  );
 }
 
 // Uso
@@ -661,4 +700,202 @@ class MouseTracker extends React.Component {
     </div>
   )}
 />
+```
+
+### 6.1.7 React Server Components (RSC)
+
+React 19 introduce oficialmente los React Server Components, una nueva arquitectura que permite ejecutar componentes completamente en el servidor, con varias ventajas:
+
+1. **Zero Bundle Size**: Los componentes del servidor no aumentan el JavaScript enviado al cliente
+2. **Acceso directo a recursos del servidor**: Base de datos, sistema de archivos, etc.
+3. **Mejores cargas iniciales**: Reducción del tiempo de carga y mejor SEO
+
+#### Modelo Híbrido de Cliente-Servidor
+
+```jsx
+// ServerComponent.jsx
+// Este componente se ejecuta SOLO en el servidor
+async function DatabaseInfo() {
+  // Se puede acceder a recursos del servidor como DB o sistema de archivos
+  const data = await db.query('SELECT * FROM users');
+  
+  return (
+    <div>
+      <h2>Usuarios en la base de datos: {data.length}</h2>
+      <ul>
+        {data.map(user => (
+          <li key={user.id}>{user.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+#### Componentes del Cliente
+
+Para marcar explícitamente un componente como componente de cliente:
+
+```jsx
+'use client';
+
+import { useState } from 'react';
+
+// Este componente se ejecuta en el navegador
+export default function ClientCounter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <p>Contador: {count}</p>
+      <button onClick={() => setCount(count + 1)}>Incrementar</button>
+    </div>
+  );
+}
+```
+
+#### Combinando Componentes de Servidor y Cliente
+
+```jsx
+// page.jsx - Componente de servidor por defecto
+import ClientCounter from './ClientCounter';
+
+// Este componente combina lógica de servidor y cliente
+export default async function Dashboard() {
+  // Fetch de datos en el servidor
+  const data = await fetch('https://api.example.com/stats').then(res => res.json());
+  
+  return (
+    <div>
+      <h1>Panel de Administración</h1>
+      <p>Usuarios activos: {data.activeUsers}</p>
+      
+      {/* Componente de cliente para interactividad */}
+      <ClientCounter />
+    </div>
+  );
+}
+```
+
+### 6.1.8 Nuevos Hooks en React 19
+
+React 19 introduce varios hooks nuevos que mejoran la experiencia de desarrollo:
+
+#### useId
+
+Genera IDs únicos para elementos DOM, especialmente útil para accesibilidad:
+
+```jsx
+import { useId } from 'react';
+
+function LabeledInput() {
+  const id = useId(); // Genera un ID único garantizado
+  
+  return (
+    <>
+      <label htmlFor={id}>Nombre:</label>
+      <input id={id} type="text" />
+    </>
+  );
+}
+```
+
+#### useDeferredValue
+
+Permite aplazar la actualización de partes no críticas de la UI:
+
+```jsx
+import { useState, useDeferredValue } from 'react';
+
+function SearchResults({ query }) {
+  // Aplaza la actualización del valor para evitar bloquear la interfaz
+  const deferredQuery = useDeferredValue(query);
+  
+  // Este componente se volverá a renderizar después sin bloquear el input
+  return (
+    <ul>
+      {generateSearchResults(deferredQuery).map(item => (
+        <li key={item.id}>{item.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+#### useTransition
+
+Permite marcar algunas actualizaciones de estado como transiciones no bloqueantes:
+
+```jsx
+import { useState, useTransition } from 'react';
+
+function TabContainer() {
+  const [selectedTab, setSelectedTab] = useState('home');
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <>
+      <TabButton
+        onClick={() => {
+          // Marca la actualización de estado como una transición
+          startTransition(() => {
+            setSelectedTab('home');
+          });
+        }}>
+        Home
+      </TabButton>
+      <TabButton
+        onClick={() => {
+          startTransition(() => {
+            setSelectedTab('dashboard');
+          });
+        }}>
+        Dashboard
+      </TabButton>
+      
+      {/* Indicador de carga durante la transición */}
+      {isPending && <Spinner />}
+      
+      {/* Contenido de la pestaña */}
+      <TabPanel tab={selectedTab} />
+    </>
+  );
+}
+```
+
+#### useOptimistic
+
+Proporciona una forma elegante de realizar actualizaciones optimistas de la UI antes de que se complete una operación asíncrona:
+
+```jsx
+import { useOptimistic } from 'react';
+
+function MessageThread({ messages, sendMessage }) {
+  // Estado optimista que se mostrará antes de la confirmación del servidor
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
+    messages,
+    (state, newMessage) => [...state, { ...newMessage, sending: true }]
+  );
+  
+  async function handleSend(text) {
+    // Añade el mensaje optimistamente a la UI
+    const optimisticMessage = { id: 'temp-id', text };
+    addOptimisticMessage(optimisticMessage);
+    
+    // Realiza la operación real con el servidor
+    await sendMessage(text);
+    // El estado se actualizará con los datos reales cuando el servidor responda
+  }
+  
+  return (
+    <div>
+      {optimisticMessages.map(msg => (
+        <div key={msg.id} className={msg.sending ? 'sending' : ''}>
+          {msg.text}
+        </div>
+      ))}
+      <MessageInput onSend={handleSend} />
+    </div>
+  );
+}
 ```

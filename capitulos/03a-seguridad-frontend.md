@@ -2,9 +2,27 @@
 
 ## 3.1 Seguridad Frontend
 
+## Introducción
+
+En un ecosistema digital donde las aplicaciones web se han vuelto omnipresentes, la seguridad en el frontend ha evolucionado de ser una consideración secundaria a convertirse en un pilar fundamental de la arquitectura de seguridad global. Las aplicaciones frontend modernas no son simplemente interfaces estáticas, sino sistemas complejos que manejan datos sensibles, interactúan con múltiples APIs y ejecutan lógica de negocio directamente en el navegador del usuario.
+
+Históricamente, la seguridad se consideraba principalmente una responsabilidad del backend, bajo la premisa de que "nunca se debe confiar en el cliente". Sin embargo, esta perspectiva ha evolucionado significativamente. Según el informe OWASP Top 10 de 2021, aproximadamente el 40% de las vulnerabilidades críticas en aplicaciones web tienen un componente de frontend significativo, incluyendo Cross-Site Scripting (XSS), que sigue siendo la tercera vulnerabilidad más prevalente.
+
+La seguridad frontend moderna abarca varios dominios interdependientes:
+
+1. **Seguridad del código cliente:** Protección contra vulnerabilidades como XSS, manipulación del DOM y robo de datos.
+2. **Seguridad en las comunicaciones:** Asegurar la transmisión de datos entre el cliente y el servidor.
+3. **Autenticación y gestión de sesiones:** Implementación segura de mecanismos de inicio de sesión y mantenimiento de sesiones.
+4. **Integridad de la interfaz:** Protección contra ataques de clickjacking, inyección de contenido y otras técnicas de manipulación visual.
+5. **Privacidad del usuario:** Gestión adecuada de datos sensibles en el cliente.
+
+Además, el auge de los frameworks modernos como React, Angular y Vue ha introducido tanto nuevas protecciones como nuevos vectores de ataque. Por ejemplo, React proporciona cierta protección contra XSS por defecto al escapar contenido automáticamente, pero introduce vulnerabilidades potenciales a través de props como dangerouslySetInnerHTML si se utilizan incorrectamente.
+
+Este capítulo explora las estrategias, herramientas y mejores prácticas para implementar una seguridad robusta en aplicaciones frontend modernas, con especial énfasis en Next.js/React como tecnologías representativas del desarrollo frontend actual.
+
 ### 3.1.1 Frontend (Next.js/React)
 
-La seguridad en el frontend se centra en proteger al usuario y prevenir ataques que puedan comprometer la integridad de la aplicación en el navegador.
+La seguridad en el frontend se centra en proteger al usuario y prevenir ataques que puedan comprometer la integridad de la aplicación en el navegador. Las aplicaciones modernas basadas en React y Next.js requieren enfoques específicos para mitigar riesgos de seguridad.
 
 ```typescript
 // pages/_document.tsx - Cabeceras de seguridad
@@ -164,7 +182,18 @@ if (result.success) {
 
 #### Cross-Site Scripting (XSS)
 
-XSS ocurre cuando un atacante logra inyectar scripts maliciosos en páginas web vistas por otros usuarios. Estos scripts pueden robar cookies, tokens de sesión o redirigir a sitios maliciosos.
+XSS ocurre cuando un atacante logra inyectar scripts maliciosos en páginas web vistas por otros usuarios. Estos scripts pueden robar cookies, tokens de sesión, capturar pulsaciones de teclas o redirigir a sitios maliciosos.
+
+**Tipos de ataques XSS:**
+
+1. **XSS Reflejado:** El script malicioso viene en la solicitud misma y se refleja en la respuesta inmediata. Por ejemplo, una búsqueda que devuelve el término buscado sin sanitizar.
+
+2. **XSS Almacenado:** El código malicioso se guarda en la base de datos y se sirve a múltiples usuarios. Es especialmente peligroso porque afecta a cualquier visitante. Ejemplos clásicos son comentarios o perfiles de usuario.
+
+3. **XSS basado en DOM:** El ataque ocurre completamente en el cliente, manipulando el DOM a través de JavaScript. Esto es especialmente relevante en SPAs (Single Page Applications).
+
+**Estadísticas de Impacto:**
+Según el informe de Verizon de Violaciones de Datos de 2023, el 44% de las brechas web involucran algún tipo de ataque XSS, y el tiempo medio para detectar estos ataques es de 287 días.
 
 **Mitigación Clave:**
 
@@ -199,7 +228,20 @@ const UserComment: React.FC<CommentProps> = ({ htmlContent }) => {
 
 #### Content Security Policy (CSP)
 
-CSP es un mecanismo de seguridad que ayuda a prevenir ataques XSS y relacionados al especificar qué dominios son fuentes confiables para scripts, estilos y otros recursos.
+CSP es un mecanismo de seguridad que ayuda a prevenir ataques XSS y relacionados al especificar qué dominios son fuentes confiables para scripts, estilos y otros recursos. Funciona como una capa adicional de seguridad que restringe los recursos que pueden cargarse y ejecutarse en tu página web.
+
+**Cómo funciona CSP:**
+
+El navegador respeta las directivas CSP que se envían a través de cabeceras HTTP o mediante etiquetas meta en el HTML. Estas directivas definen políticas como:
+
+- Qué dominios pueden servir JavaScript, CSS, imágenes, etc.
+- Si se permiten scripts inline o estilos inline
+- Si se permite la evaluación dinámica de código (eval, new Function, etc.)
+- A qué dominios se pueden conectar mediante fetch, XHR, WebSockets, etc.
+
+**Efectividad del CSP:**
+
+Según un estudio de Google, una política CSP bien configurada puede mitigar hasta el 95% de los ataques XSS potenciales. Sin embargo, sólo el 26% de los sitios web que implementan CSP lo hacen correctamente, lo que subraya la importancia de entender su configuración adecuada.
 
 **Implementación en Next.js:**
 
@@ -420,3 +462,169 @@ const ContactForm: React.FC = () => {
 
 export default ContactForm;
 ```
+
+## Buenas Prácticas de Seguridad Específicas para React
+
+React introduce algunas consideraciones específicas de seguridad que los desarrolladores deben tener en cuenta:
+
+### 1. Evitar dangerouslySetInnerHTML sin sanitización
+
+Aunque React escapa automáticamente los strings para prevenir XSS, la propiedad `dangerouslySetInnerHTML` anula esta protección:
+
+```jsx
+// ❌ Vulnerable a XSS si userProvidedHTML contiene scripts maliciosos
+function UnsafeComponent({ userProvidedHTML }) {
+  return <div dangerouslySetInnerHTML={{ __html: userProvidedHTML }} />;
+}
+
+// ✅ Sanitización adecuada con DOMPurify
+import DOMPurify from 'dompurify';
+
+function SafeComponent({ userProvidedHTML }) {
+  const sanitizedHTML = DOMPurify.sanitize(userProvidedHTML, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ['script', 'style', 'iframe'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick']
+  });
+  
+  return <div dangerouslySetInnerHTML={{ __html: sanitizedHTML }} />;
+}
+```
+
+### 2. Proteger contra ataques de prop injection
+
+Las props no sanitizadas pueden llevar a vulnerabilidades:
+
+```jsx
+// ❌ Vulnerable a inyección de eventos maliciosos
+function UserProfile(props) {
+  // El atacante podría pasar {onmouseover: "alert('XSS')"}
+  return <div {...props}>Perfil de usuario</div>;
+}
+
+// ✅ Versión segura que filtra props peligrosas
+function SafeUserProfile({ className, style, children, ...otherProps }) {
+  // Solo permitir props seguras específicas
+  const safeProps = {
+    className, 
+    style: filterStyles(style) // Una función para verificar estilos seguros
+  };
+  
+  return <div {...safeProps}>{children}</div>;
+}
+```
+
+### 3. Implementar control de acceso del lado del cliente
+
+Aunque la autorización principal debe manejarse en el servidor, el frontend debe implementar controles complementarios:
+
+```jsx
+function SecureApplication() {
+  const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+  
+  // Verificar permisos para mostrar/ocultar funcionalidades
+  const hasPermission = (permission) => {
+    return permissions.includes(permission);
+  };
+  
+  return (
+    <div>
+      {user ? (
+        <>
+          <Dashboard />
+          {hasPermission('admin') && <AdminPanel />}
+          {hasPermission('reports') && <ReportsSection />}
+        </>
+      ) : (
+        <LoginScreen />
+      )}
+    </div>
+  );
+}
+```
+
+### 4. Gestión segura de estados sensibles
+
+React proporciona diferentes opciones para almacenar estado, y cada una tiene implicaciones de seguridad:
+
+```jsx
+// ❌ Información sensible expuesta en localStorage (persiste incluso después de cerrar el navegador)
+const saveToken = (token) => {
+  localStorage.setItem('authToken', token);
+};
+
+// ✅ Mejor opción para datos sensibles en memoria (se pierde al cerrar la pestaña)
+function SecureAuth() {
+  // El token solo existe en memoria durante la sesión del navegador
+  const [authToken, setAuthToken] = useState(null);
+  
+  // El token se utiliza para las solicitudes pero nunca se almacena persistentemente
+  const fetchUserData = async () => {
+    const response = await fetch('/api/user', {
+      headers: { Authorization: `Bearer ${authToken}` }
+    });
+    // Procesar respuesta...
+  };
+  
+  return (...); // UI del componente
+}
+```
+
+### 5. Implementar protección contra CSRF en SPAs
+
+Las aplicaciones React siguen siendo vulnerables a CSRF si no se implementan protecciones adecuadas:
+
+```jsx
+function CSRFProtectedForm() {
+  const [csrfToken, setCsrfToken] = useState('');
+  
+  // Obtener el token CSRF al cargar el componente
+  useEffect(() => {
+    async function fetchCSRFToken() {
+      const response = await fetch('/api/csrf-token', { credentials: 'include' });
+      const data = await response.json();
+      setCsrfToken(data.csrfToken);
+    }
+    
+    fetchCSRFToken();
+  }, []);
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Incluir el token CSRF en todas las solicitudes POST
+    await fetch('/api/data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': csrfToken
+      },
+      credentials: 'include',
+      body: JSON.stringify({ /* datos del formulario */ })
+    });
+  };
+  
+  return <form onSubmit={handleSubmit}>...</form>;
+}
+```
+
+## Conclusión
+
+La seguridad frontend ha evolucionado para convertirse en un componente crítico de la postura de seguridad global de cualquier aplicación web moderna. Ya no es suficiente confiar únicamente en las protecciones del lado del servidor; el código que se ejecuta en el navegador del usuario requiere el mismo nivel de escrutinio y protección.
+
+Los principales puntos a recordar:
+
+1. **Defensa en profundidad:** Implementar múltiples capas de protección, desde validación de entrada y sanitización hasta CSP y encriptación.
+
+2. **Automatización de seguridad:** Integrar análisis de seguridad estático y dinámico en pipelines CI/CD para identificar vulnerabilidades temprano.
+
+3. **Educación continua:** Mantenerse actualizado sobre nuevas amenazas y vectores de ataque. Las técnicas de los atacantes evolucionan constantemente.
+
+4. **Equilibrio entre UX y seguridad:** Las mejores soluciones de seguridad son aquellas que no comprometen significativamente la experiencia del usuario.
+
+5. **Seguridad como proceso:** La seguridad frontend no es una característica que se implementa una vez, sino un proceso continuo que requiere monitorización, evaluación y mejora constante.
+
+Al aplicar estas prácticas y mantener un enfoque proactivo hacia la seguridad frontend, los desarrolladores pueden construir aplicaciones que no solo sean funcionales y atractivas, sino también resistentes contra una amplia gama de amenazas modernas.
+
+Recuerda que la seguridad absoluta es inalcanzable, pero una aplicación bien diseñada con capas apropiadas de defensa puede mitigar significativamente los riesgos y proteger tanto a los usuarios como a los sistemas con los que interactúan.
